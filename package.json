@@ -1,0 +1,15 @@
+{
+  "name": "projectmanagement",
+  "version": "1.0.0",
+  "description": "a project management application",
+  "license": "ISC",
+  "author": "misbah sheikh",
+  "type": "module",
+  "main": "index.js",
+  "scripts": {
+    "dev": "node index.js"
+  },
+  "devDependencies": {
+    "prettier": "3.9.4"
+  }
+}
