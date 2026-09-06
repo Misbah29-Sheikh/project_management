@@ -43,7 +43,8 @@ const getDashboard = asyncHandler(async (req, res) => {
     _id: { $in: projectIds }
   })
     .select("_id name description createdAt")
-    .sort({ createdAt: -1 });
+    .sort({ createdAt: -1 })
+    .limit(5);
 
   // Get tasks from user's projects
   const tasks = await Task.find({
@@ -51,27 +52,36 @@ const getDashboard = asyncHandler(async (req, res) => {
   })
     .populate("project", "name")
     .populate("assignedTo", "avatar username fullName")
-    .sort({ createdAt: -1 });
+    .sort({ createdAt: -1 })
+    .limit(5);
 
-  const completedTasks = tasks.filter(
-    (task) => task.status === TaskStatusEnum.DONE
-  ).length;
+  const [totalProjects, totalTasks, completedTasks] = await Promise.all([
+    Project.countDocuments({
+      _id: { $in: projectIds }
+    }),
 
-  const pendingTasks = tasks.filter(
-    (task) => task.status !== TaskStatusEnum.DONE
-  ).length;
+    Task.countDocuments({
+      project: { $in: projectIds }
+    }),
 
-  const recentProjects = projects.slice(0, 5);
+    Task.countDocuments({
+      project: { $in: projectIds },
+      status: TaskStatusEnum.DONE
+    })
+  ]);
 
-  const recentTasks = tasks.slice(0, 5);
+  const pendingTasks = totalTasks - completedTasks;
+
+  const recentProjects = projects;
+  const recentTasks = tasks;
 
   return res.status(200).json(
     new ApiResponse(
       200,
       {
         stats: {
-          totalProjects: projects.length,
-          totalTasks: tasks.length,
+          totalProjects,
+          totalTasks,
           completedTasks,
           pendingTasks
         },

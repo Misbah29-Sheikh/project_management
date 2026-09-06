@@ -8,6 +8,7 @@ import { ApiError } from "../utils/api-error.js";
 import { asyncHandler } from "../utils/async-handler.js";
 import mongoose from "mongoose"
 import { AvailableUserRole, UserRolesEnum } from "../utils/constants.js";
+import { uploadToCloudinary } from "../utils/cloudinary-upload.js";
 
 const getTasks = asyncHandler(async (req, res) => {
   const { projectId } = req.params;
@@ -58,11 +59,20 @@ const createTask = asyncHandler(async (req, res) => {
 
   const files = req.files || [];
 
-  const attachments = files.map((file) => ({
-    url: `${process.env.SERVER_URL}/images/${file.filename}`,
-    mimetype: file.mimetype,
-    size: file.size
-  }));
+  const attachments = await Promise.all(
+    files.map(async (file) => {
+      const result = await uploadToCloudinary(
+        file.buffer,
+        file.originalname
+      );
+
+      return {
+        url: result.secure_url,
+        mimetype: file.mimetype,
+        size: file.size
+      };
+    })
+  );
 
   const task = await Task.create({
     title,
@@ -244,11 +254,20 @@ const updateTask = asyncHandler(async (req, res) => {
   const files = req.files || [];
 
   if (files.length > 0) {
-    task.attachments = files.map(file => ({
-      url: `${process.env.SERVER_URL}/images/${file.filename}`,
-      mimetype: file.mimetype,
-      size: file.size
-    }));
+    task.attachments = await Promise.all(
+      files.map(async (file) => {
+        const result = await uploadToCloudinary(
+          file.buffer,
+          file.originalname
+        );
+
+        return {
+          url: result.secure_url,
+          mimetype: file.mimetype,
+          size: file.size
+        };
+      })
+    );
   }
 
   await task.save();
