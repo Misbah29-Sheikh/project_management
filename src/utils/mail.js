@@ -1,5 +1,4 @@
 import Mailgen from "mailgen";
-import nodemailer from "nodemailer";
 
 const sendEmail = async (options) => {
   const mailGenerator = new Mailgen({
@@ -13,27 +12,31 @@ const sendEmail = async (options) => {
   const emailTextual = mailGenerator.generatePlaintext(options.mailgenContent)
   const emailHtml = mailGenerator.generate(options.mailgenContent)
 
-  const transporter = nodemailer.createTransport({
-    host: process.env.RESEND_SMTP_HOST,
-    port: process.env.RESEND_SMTP_PORT,
-    auth: {
-      user: process.env.RESEND_SMTP_USER,
-      pass: process.env.RESEND_SMTP_PASS
-    }
-  })
-
-  const mail = {
-    from: "onboarding@resend.dev",
-    to: options.email,
-    subject: options.subject,
-    text: emailTextual,
-    html: emailHtml
-  }
-
   try {
-    await transporter.sendMail(mail)
+    const response = await fetch("https://api.resend.com/emails", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${process.env.RESEND_API_KEY}`
+      },
+      body: JSON.stringify({
+        from: "onboarding@resend.dev",
+        to: options.email,
+        subject: options.subject,
+        text: emailTextual,
+        html: emailHtml
+      })
+    })
+
+    const data = await response.json()
+
+    if (!response.ok) {
+      throw new Error(data.message || "Failed to send email")
+    }
+
+    console.log("Email sent successfully:", data)
   } catch (error) {
-    console.error("Error", error);
+    console.error("Error sending email:", error)
   }
 }
 
