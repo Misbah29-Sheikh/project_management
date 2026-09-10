@@ -6,6 +6,20 @@ import { emailVerificationContent, forgotPasswordContent, sendEmail } from "../u
 import jwt from "jsonwebtoken"
 import crypto from "crypto";
 
+const accessTokenOptions = {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
+    maxAge: 1 * 24 * 60 * 60 * 1000 // 1 day in milliseconds (matches 1d)
+  }
+
+  const refreshTokenOptions = {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
+    maxAge: 10 * 24 * 60 * 60 * 1000 // 10 days in milliseconds (matches 10d)
+  }
+
 const generateAccesAndRefreshTokens = async (userId) => {
   try {
     const user = await User.findById(userId);
@@ -100,16 +114,10 @@ const login = asyncHandler(async (req, res) => {
     "-password -refreshToken -emailVerificationToken -emailVerificationExpiry"
   );
 
-  const options = {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
-    sameSite: process.env.NODE_ENV === "production" ? "none" : "lax"
-  }
-
   return res
     .status(200)
-    .cookie("accessToken", accessToken, options)
-    .cookie("refreshToken", refreshToken, options)
+    .cookie("accessToken", accessToken, accessTokenOptions)
+    .cookie("refreshToken", refreshToken, refreshTokenOptions)
     .json(
       new ApiResponse(
         200,
@@ -135,14 +143,10 @@ const logout = asyncHandler(async (req, res) => {
       new: true
     }
   )
-  const options = {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
-    sameSite: process.env.NODE_ENV === "production" ? "none" : "lax"
-  }
+
   return res.status(200)
-    .clearCookie("accessToken", options)
-    .clearCookie("refreshToken", options)
+    .clearCookie("accessToken", accessTokenOptions)
+    .clearCookie("refreshToken", refreshTokenOptions)
     .json(
       new ApiResponse(200, {}, "User logged out")
     )
@@ -248,18 +252,12 @@ const refreshAccessToken = asyncHandler(async (req, res) => {
     throw new ApiError(401, "Refresh token is invalid or has been used")
   }
 
-  const options = {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
-    sameSite: process.env.NODE_ENV === "production" ? "none" : "lax"
-  }
-
   const { accessToken, refreshToken: newRefreshToken } = await generateAccesAndRefreshTokens(user._id)
 
   return res
     .status(200)
-    .cookie("accessToken", accessToken, options)
-    .cookie("refreshToken", newRefreshToken, options)
+    .cookie("accessToken", accessToken, accessTokenOptions)
+    .cookie("refreshToken", newRefreshToken, refreshTokenOptions)
     .json(
       new ApiResponse(200, { accessToken, refreshToken: newRefreshToken }, "Access token refreshed")
     )
@@ -342,6 +340,10 @@ const changeCurrentPassword = asyncHandler(async (req, res) => {
 
   const user = await User.findById(req.user?._id)
 
+  if (!user) {
+    throw new ApiError(404, "User not found")
+  }
+
   const isPasswordValid = await user.isPasswordCorrect(oldPassword)
 
   if (!isPasswordValid) {
@@ -351,24 +353,14 @@ const changeCurrentPassword = asyncHandler(async (req, res) => {
   const isSamePassword = await user.isPasswordCorrect(newPassword)
 
   if (isSamePassword) {
-    throw new ApiError(
-      400,
-      "New password must be different from your old password"
-    )
+    throw new ApiError(400, "New password must be different from your old password")
   }
 
   user.password = newPassword
+  user.refreshToken = undefined  // 👈 same reasoning as resetPassword
   await user.save({ validateBeforeSave: false })
 
-  return res
-    .status(200)
-    .json(
-      new ApiResponse(
-        200,
-        {},
-        "Password changed successfully"
-      )
-    )
+  return res.status(200).json(new ApiResponse(200, {}, "Password changed successfully"))
 })
 
 export {
